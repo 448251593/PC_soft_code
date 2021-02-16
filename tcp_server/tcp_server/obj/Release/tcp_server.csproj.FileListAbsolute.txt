@@ -5,3 +5,5 @@ D:\learn_discovery\PC_soft_code\tcp_server\tcp_server\obj\Release\tcp_server.Pro
 D:\learn_discovery\PC_soft_code\tcp_server\tcp_server\obj\Release\tcp_server.csproj.GenerateResource.Cache
 D:\learn_discovery\PC_soft_code\tcp_server\tcp_server\obj\Release\tcp_server.exe
 D:\learn_discovery\PC_soft_code\tcp_server\tcp_server\obj\Release\tcp_server.pdb
+D:\learn_discovery\PC_soft_code\tcp_server\tcp_server\bin\Release\tcp_server.exe.config
+D:\learn_discovery\PC_soft_code\tcp_server\tcp_server\obj\Release\tcp_server.csprojResolveAssemblyReference.cache

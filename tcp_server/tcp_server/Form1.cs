@@ -5,20 +5,17 @@ using System.Data;
 using System.Drawing;
 using System.Text;
 using System.Windows.Forms;
-using System;
 using System.IO;
 
 using System.Net;
 using System.Net.Sockets;
-using System.Text;
 using System.Threading;
+using NetFrame.Net.TCP.Listener.Asynchronous;
 namespace tcp_server
 {
     public partial class Form1 : Form
     {
-        public static ManualResetEvent TcpListenerEndEvent = new ManualResetEvent(false);
-        public static ManualResetEvent TcpClientClosedEvent = new ManualResetEvent(false);
-
+        private static int all_recv_num = 0;
         public Form1()
         {
             InitializeComponent();
@@ -26,171 +23,112 @@ namespace tcp_server
             Thread workThread = new Thread(new ParameterizedThreadStart(ThreadWork_start));
             workThread.Start(str);
             label2.Text = all_recv_num.ToString();
+            label6.Text = "192.168.0.112:6800";
+            all_button_set(false);
+            this.Text = "200k pc tools--版本号1.01.01";
         }
         /* Initializes the Listener */
-        static TcpListener tServer = new TcpListener(IPAddress.Parse("192.168.0.112"), 6800);
 
+        static AsyncTCPServer tttp = new AsyncTCPServer(IPAddress.Parse("192.168.0.112"), 6800);
+        static TCPClientState client_fd;
+        static byte[] recv_data_globa = new byte[1000 * 400 * 120+100];//120s,200k short =400k byte 
+        static int recv_data_globa_len = 0;
+        static int ack_count = 0;//发送数据以后等待接收
+        private static void DataReceived_callback(object os, AsyncEventArgs state)
+        {
+            //优先判断是否有应答消息
+            if (ack_count > 0)
+            {
+                ack_count = 0;
+                //byte[] msg = new byte[state._state.buffer_data_size];
+                label4_text = System.Text.Encoding.Default.GetString(state._state.Buffer, 0, state._state.buffer_data_size);
+                do_update_type |= 0x0004;
+                return;
+            }
+            //保存数据到内存
+            all_recv_num = all_recv_num + state._state.buffer_data_size;
+            do_update_type = do_update_type | 0x01; 
+            for (int i = 0; i < state._state.buffer_data_size; i++)
+            {
+                Console.Write(state._state.Buffer[i].ToString("x2") + ",");  //法1
+            }
+            Console.WriteLine("\n");
+            Buffer.BlockCopy(state._state.Buffer, 0, 
+                recv_data_globa, recv_data_globa_len, 
+                state._state.buffer_data_size);
+            recv_data_globa_len = recv_data_globa_len + state._state.buffer_data_size;
+
+        }
+        private void button4_Click(object sender, EventArgs e)
+        {
+            string file_name = DateTime.Now.ToLocalTime().ToString("yyyy_MM_dd_hh_mm_ss")+"_200k.txt";
+            Console.WriteLine(file_name);
+
+            //recv_data_globa[0] = 0x10;
+            //recv_data_globa[1] = 0x20;
+            //recv_data_globa[2] = 0x14;
+            //recv_data_globa[3] = 0x20;
+            //recv_data_globa[4] = 0x13;
+            //recv_data_globa[5] = 0x20;
+            //for (int i = 0; i < 6 / 2; i++)
+            //{
+            //    int tmp = recv_data_globa[i * 2] + recv_data_globa[i * 2 + 1] * 256;
+            //    tmp = (tmp & 0x3fff) >> 2;
+            //    tmp = tmp * 3300;
+            //    tmp = tmp / 4096;
+                
+            //    Console.WriteLine(tmp.ToString());   
+            //}
+
+            StreamWriter sw = File.CreateText(file_name);
+            for (int i = 0; i < recv_data_globa_len / 2; i++)
+            {
+                int tmp = recv_data_globa[i * 2] + recv_data_globa[i * 2 + 1] * 256;
+                tmp = (tmp & 0x3fff) >> 2;
+                //sw.WriteLine(recv_data_globa[i * 2].ToString("x2") + recv_data_globa[i * 2 + 1].ToString("x2"));                //写入一行文本 
+                sw.WriteLine(tmp.ToString());                //写入一行文本 
+                
+            }
+            sw.Flush();                    //清空 
+            sw.Close();                    //关闭 
+            label4_text = "保存成功,"+file_name;
+            do_update_type |= 0x0004;
+        }
         private static void ThreadWork_start(object param)
         {
-            StartServer();
+            //StartServer();
 
-
+            tttp.DataReceived += new System.EventHandler<AsyncEventArgs>(DataReceived_callback);
+            tttp.ClientConnected += new System.EventHandler<AsyncEventArgs>(clientconnect_callback);
+            tttp.ClientDisconnected += new System.EventHandler<AsyncEventArgs>(clientdisconnect_callback);
+            tttp.CompletedSend += new System.EventHandler<AsyncEventArgs>(sendcomplete_callback);
+            tttp.Start();
         }
-     
-        private static void StartServer()
+        private static void sendcomplete_callback(object os, AsyncEventArgs state)
         {
-            try
-            {
-                ///* Initializes the Listener */
-                //TcpListener tServer = new TcpListener(IPAddress.Parse("192.168.0.112"), 6800);
-
-                /* Start Listeneting at the specified port */
-                tServer.Start();
-
-                TcpListenerEndEvent.Reset();
-                
-                while (!TcpListenerEndEvent.WaitOne(0))
-                {
-                    BeginAccecptATcpClient(tServer);
-                }
-                //Console.WriteLine(string.Concat(tServer.LocalEndpoint, " will been termined!"));
-
-                //tServer.Stop();
-
-                //Console.ReadLine();
-            }
-            catch (Exception e)
-            {
-                Console.WriteLine("Error..... " + e.StackTrace);
-            }
-
+            //send complete
 
         }
-        private static void BeginAccecptATcpClient(TcpListener tServer)
+        private static void clientconnect_callback(object os, AsyncEventArgs state)
         {
-            // Set the event to nonsignaled state.
-            TcpClientClosedEvent.Reset();
-
-            tServer.BeginAcceptTcpClient(new AsyncCallback(DoAcceptTcpClientCallback), tServer);
-
-            TcpClientClosedEvent.WaitOne();
+            label4_text = "connect:"+state._state.TcpClient.Client.RemoteEndPoint.ToString();
+            do_update_type = do_update_type |0x0002;
+            client_fd = state._state;//保存client信息,发送会用到
+            
         }
-
-        private static void DoAcceptTcpClientCallback(IAsyncResult ar)
+        private static void clientdisconnect_callback(object os, AsyncEventArgs state)
         {
-            TcpClient client = null;
-            try
-            {
-                // Get the listener that handles the client request.
-                TcpListener listener = (TcpListener)ar.AsyncState;
-
-                client = listener.EndAcceptTcpClient(ar);
-
-                if (client != null)
-                {
-                    if (client.Client != null)
-                    {
-                        Console.WriteLine("Connection accepted from " + client.Client.RemoteEndPoint);
-                        label4_text = "Connection accepted from " + client.Client.RemoteEndPoint;
-                        do_update_type = do_update_type | 0x02;
-                    }
-                    Thread th = new Thread(new ParameterizedThreadStart(ThreadWork));
-                    th.Start(client);
-                }
-            }
-            catch (SocketException se) { Console.WriteLine(se.StackTrace); }
-            catch (Exception e) { Console.WriteLine(e.StackTrace); }
-            finally { }
-        }
-       
-
-        private const uint SIZE_OF_READ_BUFFER = 10240;
-        private const long SIZE_OF_MAX_READ = 200;
-        private static int all_recv_num = 0;
-        private static void ThreadWork(object param)
-        {
-            TcpClient s = param as TcpClient;
-            NetworkStream stream = s.GetStream();
-            try
-            {
-                byte[] b = new byte[SIZE_OF_READ_BUFFER];
-                int numberOfBytesRead = 0;
-                //MemoryStream dummyByteStream = new MemoryStream();
-                //long bytesToRead = SIZE_OF_MAX_READ;
-                do
-                {
-                    byte[] buffer = new byte[1];
-                    int bytesPeeked = s.Client.Receive(buffer, SocketFlags.Peek);
-                    if (bytesPeeked == 0)
-                    {
-                        //s.Client.Close();
-                        break;
-                    }
-                    else if (stream.DataAvailable)
-                    {
-
-                        int len = (int)SIZE_OF_READ_BUFFER;
-                        numberOfBytesRead = stream.Read(b, 0, len);
-                        Console.WriteLine("numberOfBytesRead=" + numberOfBytesRead);
-                        all_recv_num = all_recv_num + numberOfBytesRead;
-                        do_update_type = do_update_type | 0x01;
-                        //Console.WriteLine(b.ToString());
-                        for (int i = 0; i < numberOfBytesRead; i++ )
-                        {
-                            Console.Write(b[i].ToString("x2") + ",");  //法1
-                        }
-                        Console.WriteLine("\n");
-                        //dummyByteStream.Write(b, 0, numberOfBytesRead);
-                    }
-
-                    //if (dummyByteStream.Length == 4)
-                    //{
-                    //    // header complete, get message length and read rest of message
-                    //    byte[] header = dummyByteStream.ToArray();
-
-                    //    bytesToRead = header[0];
-                    //    bytesToRead += header[1] * 0x100;
-                    //    bytesToRead += header[2] * 0x10000;
-                    //    bytesToRead += header[3] * 0x1000000;
-                    //    bytesToRead += 5; // length + ending null
-                    //    // Signal the calling thread to continue.
-                    //}
-
-                    //if (dummyByteStream.Length > 0)
-                    //{
-                    //    byte[] received = dummyByteStream.ToArray();
-                    //    var output = Encoding.GetEncoding(1252).GetString(received);
-                    //    if ("exit".Equals(output, StringComparison.InvariantCultureIgnoreCase))
-                    //        TcpListenerEndEvent.Set();
-                    //    Console.WriteLine(string.Concat("Rec client: ", output));
-                    //}
-
-                } while (true);
-                //} while (stream.DataAvailable && bytesToRead > dummyByteStream.Length);
-
-                // Process the connection here. (Add the client to a
-                // server table, read data, etc.)
-                //Console.WriteLine("Client connected completed");
-            }
-            catch (Exception exp)
-            {
-                Console.WriteLine(exp.StackTrace);
-            }
-            finally
-            {
-                label4_text = "disConnection ";
-                do_update_type = do_update_type | 0x02;
-
-                TcpClientClosedEvent.Set();
-                stream.Close();
-                s.Close();
-            }
+            label4_text = "disconnect";
+            do_update_type = do_update_type | 0x0002;
         }
 
-        private void button1_Click(object sender, System.EventArgs e)
+
+      
+        private void button1_Click_1(object sender, System.EventArgs e)
         {
             all_recv_num = 0;
             label2.Text = all_recv_num.ToString();
+            recv_data_globa_len = 0;
         }
         private static UInt32 do_update_type = 0;
         private static string label4_text = "";
@@ -205,34 +143,114 @@ namespace tcp_server
             tmp = do_update_type & 0x0002;
             if (tmp > 0)
             {
+                if (label4_text.StartsWith("connect"))
+                {
+
+                    all_button_set(true);
+                }
+                else
+                {
+                    all_button_set(false);
+                }
                 label4.Text = label4_text;
+            }
+            tmp = do_update_type & 0x0004;
+            if (tmp > 0)
+            {
+                label7.Text = "消息状态:" + label4_text;
             }
 
         }
 
         private void Form1_FormClosing(object sender, FormClosingEventArgs e)
         {
-            tServer.Stop();
+            //tServer.Stop();
+            tttp.Start();
         }
-        private  void stop_tcp_server()
-        {
-            TcpClient tcpClient = new TcpClient();
-            tcpClient.Connect("127.0.0.1", 6800);
+        
 
-            NetworkStream ns = tcpClient.GetStream();
-            if (ns.CanWrite)
+        private void button2_Click(object sender, System.EventArgs e)
+        {
+            recv_data_globa_len = 0;//清零接收缓存
+            //client_fd
+            byte[] message = System.Text.Encoding.Default.GetBytes("set start");
+           
+            tttp.Send(client_fd, message);
+
+            //Send(client_fd, "hello worl");
+        }
+
+        private void button3_Click(object sender, System.EventArgs e)
+        {
+            ack_count = 1;
+            //client_fd
+            if(radioButton1.Checked)
             {
-                Byte[] sendBytes = Encoding.ASCII.GetBytes("Exit");
-                ns.Write(sendBytes, 0, sendBytes.Length);
-                //lbMsg.Items.Add("发送退出命令成功！");
+                byte[] message = System.Text.Encoding.Default.GetBytes("set long=10000");
+                Console.WriteLine(System.Text.Encoding.Default.GetString(message));
+                tttp.Send(client_fd, message);
+            }
+            else if(radioButton2.Checked)
+            {
+                byte[] message = System.Text.Encoding.Default.GetBytes("set long=20000");
+                Console.WriteLine(System.Text.Encoding.Default.GetString(message));
+                tttp.Send(client_fd, message);
+            }
+            else if(radioButton3.Checked)
+            {
+                byte[] message = System.Text.Encoding.Default.GetBytes("set long=30000");
+                Console.WriteLine(System.Text.Encoding.Default.GetString(message));
+                tttp.Send(client_fd, message);
+            }
+            else if(radioButton4.Checked)
+            {
+                byte[] message = System.Text.Encoding.Default.GetBytes("set long=60000");
+                Console.WriteLine(System.Text.Encoding.Default.GetString(message));
+                tttp.Send(client_fd, message);
+            }
+            else if(radioButton5.Checked)
+            {
+                byte[] message = System.Text.Encoding.Default.GetBytes("set long=120000");
+                Console.WriteLine(System.Text.Encoding.Default.GetString(message));
+                tttp.Send(client_fd, message);
+            }
+            else if(radioButton6.Checked)
+            {
+                byte[] message = System.Text.Encoding.Default.GetBytes("set long=240000");
+                Console.WriteLine(System.Text.Encoding.Default.GetString(message));
+                tttp.Send(client_fd, message);
+            }
+            else if (radioButton7.Checked)// 5s
+            {
+                byte[] message = System.Text.Encoding.Default.GetBytes("set long=5000");
+                Console.WriteLine(System.Text.Encoding.Default.GetString(message));
+                tttp.Send(client_fd, message);
+            }
+            else if (radioButton8.Checked)//1s
+            {
+                byte[] message = System.Text.Encoding.Default.GetBytes("set long=1000");
+                Console.WriteLine(System.Text.Encoding.Default.GetString(message));
+                tttp.Send(client_fd, message);
+            }
+
+        }
+        public void all_button_set(bool flag)
+        {
+            if (flag)
+            {
+                button2.Enabled = true;
+                button3.Enabled = true;
+                button4.Enabled = true;
             }
             else
             {
-                //lbMsg.Items.Add("发送退出命令失败！");
-                return;
+
+                button2.Enabled = false;
+                button3.Enabled = false;
+                button4.Enabled = false;
             }
-            ns.Close();
-            tcpClient.Close();
         }
+
+
     }
 }
