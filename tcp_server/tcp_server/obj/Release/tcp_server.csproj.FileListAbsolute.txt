@@ -1,0 +1,7 @@
+D:\learn_discovery\PC_soft_code\tcp_server\tcp_server\bin\Release\tcp_server.exe
+D:\learn_discovery\PC_soft_code\tcp_server\tcp_server\bin\Release\tcp_server.pdb
+D:\learn_discovery\PC_soft_code\tcp_server\tcp_server\obj\Release\tcp_server.Form1.resources
+D:\learn_discovery\PC_soft_code\tcp_server\tcp_server\obj\Release\tcp_server.Properties.Resources.resources
+D:\learn_discovery\PC_soft_code\tcp_server\tcp_server\obj\Release\tcp_server.csproj.GenerateResource.Cache
+D:\learn_discovery\PC_soft_code\tcp_server\tcp_server\obj\Release\tcp_server.exe
+D:\learn_discovery\PC_soft_code\tcp_server\tcp_server\obj\Release\tcp_server.pdb
