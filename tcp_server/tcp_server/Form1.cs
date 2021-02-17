@@ -15,14 +15,14 @@ namespace tcp_server
 {
     public partial class Form1 : Form
     {
-        private static int all_recv_num = 0;
+        //private static int all_recv_num = 0;
         public Form1()
         {
             InitializeComponent();
             var str = Console.ReadLine();
             Thread workThread = new Thread(new ParameterizedThreadStart(ThreadWork_start));
             workThread.Start(str);
-            label2.Text = all_recv_num.ToString();
+            label2.Text = recv_data_globa_len.ToString();
             label6.Text = "192.168.0.112:6800";
             all_button_set(false);
             this.Text = "200k pc tools--版本号1.01.01";
@@ -41,13 +41,12 @@ namespace tcp_server
             {
                 ack_count = 0;
                 //byte[] msg = new byte[state._state.buffer_data_size];
-                label4_text = System.Text.Encoding.Default.GetString(state._state.Buffer, 0, state._state.buffer_data_size);
-                do_update_type |= 0x0004;
+                show_status_info(System.Text.Encoding.Default.GetString(state._state.Buffer, 0, state._state.buffer_data_size));
                 return;
             }
             //保存数据到内存
-            all_recv_num = all_recv_num + state._state.buffer_data_size;
-            do_update_type = do_update_type | 0x01; 
+            //all_recv_num = all_recv_num + state._state.buffer_data_size;
+
             for (int i = 0; i < state._state.buffer_data_size; i++)
             {
                 Console.Write(state._state.Buffer[i].ToString("x2") + ",");  //法1
@@ -61,7 +60,7 @@ namespace tcp_server
         }
         private void button4_Click(object sender, EventArgs e)
         {
-            string file_name = DateTime.Now.ToLocalTime().ToString("yyyy_MM_dd_hh_mm_ss")+"_200k.txt";
+            string file_name = DateTime.Now.ToLocalTime().ToString("yyyy_MM_dd_HH_mm_ss")+"_200k.txt";
             Console.WriteLine(file_name);
 
             //recv_data_globa[0] = 0x10;
@@ -85,14 +84,17 @@ namespace tcp_server
             {
                 int tmp = recv_data_globa[i * 2] + recv_data_globa[i * 2 + 1] * 256;
                 tmp = (tmp & 0x3fff) >> 2;
+                //tmp = tmp * 3300;
+                //tmp = tmp / 4096;
+                //sw.WriteLine(tmp.ToString());                //写入一行文本 
                 //sw.WriteLine(recv_data_globa[i * 2].ToString("x2") + recv_data_globa[i * 2 + 1].ToString("x2"));                //写入一行文本 
-                sw.WriteLine(tmp.ToString());                //写入一行文本 
-                
+                sw.Write(tmp.ToString("x4")+"\n");                //写入一行文本 
+                //sw.Write(tmp.ToString() + "\n");
             }
             sw.Flush();                    //清空 
             sw.Close();                    //关闭 
-            label4_text = "保存成功,"+file_name;
-            do_update_type |= 0x0004;
+
+            show_status_info("保存成功," + file_name);
         }
         private static void ThreadWork_start(object param)
         {
@@ -111,35 +113,44 @@ namespace tcp_server
         }
         private static void clientconnect_callback(object os, AsyncEventArgs state)
         {
-            label4_text = "connect:"+state._state.TcpClient.Client.RemoteEndPoint.ToString();
-            do_update_type = do_update_type |0x0002;
+            show_connect_info("connect:" + state._state.TcpClient.Client.RemoteEndPoint.ToString());
             client_fd = state._state;//保存client信息,发送会用到
             
         }
         private static void clientdisconnect_callback(object os, AsyncEventArgs state)
         {
-            label4_text = "disconnect";
+            show_connect_info("disconnect");
             do_update_type = do_update_type | 0x0002;
         }
 
+        private static void show_status_info(string info)
+        {
+            status_info = info;
+            do_update_type |= 0x0004;
+        }
+        private static void show_connect_info(string info)
+        {
+            label4_text = info;
+            do_update_type = do_update_type | 0x0002;
+        }
 
-      
         private void button1_Click_1(object sender, System.EventArgs e)
         {
-            all_recv_num = 0;
-            label2.Text = all_recv_num.ToString();
+            //all_recv_num = 0;
             recv_data_globa_len = 0;
+            label2.Text = recv_data_globa_len.ToString();
         }
         private static UInt32 do_update_type = 0;
         private static string label4_text = "";
+        private static string status_info = "";
         private void timer1_Tick(object sender, System.EventArgs e)
         {
             UInt32 tmp;
-            tmp = do_update_type & 0x0001;
-            if (tmp > 0)
-            {
-                label2.Text = all_recv_num.ToString();
-            }
+            //tmp = do_update_type & 0x0001;
+            //if (tmp > 0)
+            //{
+            label2.Text = recv_data_globa_len.ToString();
+            //}
             tmp = do_update_type & 0x0002;
             if (tmp > 0)
             {
@@ -157,8 +168,9 @@ namespace tcp_server
             tmp = do_update_type & 0x0004;
             if (tmp > 0)
             {
-                label7.Text = "消息状态:" + label4_text;
+                label7.Text = "消息状态:" + status_info;
             }
+            do_update_type = 0;
 
         }
 
@@ -172,12 +184,13 @@ namespace tcp_server
         private void button2_Click(object sender, System.EventArgs e)
         {
             recv_data_globa_len = 0;//清零接收缓存
+            //all_recv_num = 0;
             //client_fd
             byte[] message = System.Text.Encoding.Default.GetBytes("set start");
            
             tttp.Send(client_fd, message);
 
-            //Send(client_fd, "hello worl");
+            //Send(client_fd, "hello world");
         }
 
         private void button3_Click(object sender, System.EventArgs e)
@@ -241,6 +254,7 @@ namespace tcp_server
                 button2.Enabled = true;
                 button3.Enabled = true;
                 button4.Enabled = true;
+                button5.Enabled = true;
             }
             else
             {
@@ -248,6 +262,37 @@ namespace tcp_server
                 button2.Enabled = false;
                 button3.Enabled = false;
                 button4.Enabled = false;
+                button5.Enabled = false;
+            }
+        }
+
+        private void button5_Click(object sender, EventArgs e)
+        {
+            ack_count = 1;
+            //client_fd
+            if (radioButton9.Checked)
+            {
+                byte[] message = System.Text.Encoding.Default.GetBytes("set gain=0");
+                Console.WriteLine(System.Text.Encoding.Default.GetString(message));
+                tttp.Send(client_fd, message);
+            }
+            else if (radioButton10.Checked)
+            {
+                byte[] message = System.Text.Encoding.Default.GetBytes("set gain=1");
+                Console.WriteLine(System.Text.Encoding.Default.GetString(message));
+                tttp.Send(client_fd, message);
+            }
+            else if (radioButton11.Checked)
+            {
+                byte[] message = System.Text.Encoding.Default.GetBytes("set gain=2");
+                Console.WriteLine(System.Text.Encoding.Default.GetString(message));
+                tttp.Send(client_fd, message);
+            }
+            else if (radioButton12.Checked)
+            {
+                byte[] message = System.Text.Encoding.Default.GetBytes("set gain=3");
+                Console.WriteLine(System.Text.Encoding.Default.GetString(message));
+                tttp.Send(client_fd, message);
             }
         }
 
